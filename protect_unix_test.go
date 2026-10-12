@@ -30,10 +30,23 @@ func newUDPSocket(t *testing.T) int {
 	return newSocket(t, unix.AF_INET, unix.SOCK_DGRAM)
 }
 
+// socketPath returns a fresh path for a Unix-domain socket. t.TempDir embeds
+// the test name, which can exceed the 104-byte sun_path limit on macOS.
+// See https://github.com/golang/go/issues/62614
+func socketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "protect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "protect_path")
+}
+
 // startServer serves server on a fresh path and returns that path.
 func startServer(t *testing.T, server *Server) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "protect_path")
+	path := socketPath(t)
 	listener, err := Listen(path)
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +238,7 @@ func TestServerRejectsMalformedRequest(t *testing.T) {
 }
 
 func TestProtectContextStopsAtDeadline(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "protect_path")
+	path := socketPath(t)
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +262,7 @@ func TestProtectContextStopsAtDeadline(t *testing.T) {
 }
 
 func TestListenKeepsRegularFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "protect_path")
+	path := socketPath(t)
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
