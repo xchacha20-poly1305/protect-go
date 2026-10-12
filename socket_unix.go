@@ -9,7 +9,9 @@ import (
 )
 
 // SocketNetwork returns the Go network name of fd: "tcp4", "tcp6", "udp4" or
-// "udp6". Any other kind of socket is an error.
+// "udp6". Any other kind of socket is an error. An ICMP datagram socket is
+// reported as "udp4" or "udp6", because not every system exposes the
+// protocol of a socket.
 func SocketNetwork(fd int) (string, error) {
 	socketType, err := unix.GetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_TYPE)
 	if err != nil {

@@ -5,6 +5,7 @@ package protect
 import (
 	"errors"
 	"net"
+	"os"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -68,5 +69,21 @@ func TestServerRejectsMalformedRequest(t *testing.T) {
 				t.Errorf("got reply %#02x", reply)
 			}
 		})
+	}
+}
+
+func TestServerRejectsNonSocket(t *testing.T) {
+	path := startServer(t, &Server{Verify: func(*Request) error {
+		t.Error("verify called for a rejected request")
+		return nil
+	}, Protector: forbiddenProtector(t)})
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+	if err := Protect(path, int(reader.Fd())); !errors.Is(err, ErrRejected) {
+		t.Fatalf("got %v, want ErrRejected", err)
 	}
 }

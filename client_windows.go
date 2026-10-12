@@ -6,7 +6,8 @@ import (
 )
 
 // requestLength is the length of a Windows request: the handle value of the
-// socket as an unsigned little-endian integer.
+// socket as an unsigned little-endian integer. Every architecture Windows runs
+// on is little-endian, so the request is the in-memory form of the value.
 const requestLength = 8
 
 // writeRequest sends the handle value of fd. The server duplicates the handle

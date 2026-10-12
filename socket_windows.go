@@ -11,7 +11,9 @@ import (
 const soProtocolInfoW = 0x2005
 
 // SocketNetwork returns the Go network name of the socket handle fd: "tcp4",
-// "tcp6", "udp4" or "udp6". Any other kind of socket is an error.
+// "tcp6", "udp4", "udp6", or "ip4" and "ip6" for a raw socket, such as one
+// that sends ICMP echoes. The protocol of a raw socket is not reported. Any
+// other kind of socket is an error.
 func SocketNetwork(fd int) (string, error) {
 	info, err := protocolInfo(windows.Handle(fd))
 	if err != nil {
@@ -23,6 +25,8 @@ func SocketNetwork(fd int) (string, error) {
 		network = "tcp"
 	case windows.SOCK_DGRAM:
 		network = "udp"
+	case windows.SOCK_RAW:
+		network = "ip"
 	default:
 		return "", fmt.Errorf("protect: unsupported socket type %d", info.SocketType)
 	}

@@ -1,6 +1,6 @@
 // Package protect implements the socket protect path protocol.
 //
-// A tunnel that captures a host's IP traffic also captures sockets of other
+// A tunnel that captures a host's traffic also captures sockets of other
 // local processes. A client hands each socket that must stay outside the tunnel
 // to the server that owns it over a Unix-domain stream socket. The server
 // exempts the socket and replies with one octet: [ReplySuccess] or
@@ -10,6 +10,9 @@
 // sockets carry no descriptors, so there the client sends the value of its
 // SOCKET handle, and the server duplicates that handle out of the client
 // process. On other systems every operation returns [errors.ErrUnsupported].
+//
+// The protocol accepts a socket of any family, type and protocol. Whether a
+// socket can be exempted is up to the [Protector].
 package protect
 
 import (
@@ -59,11 +62,10 @@ type Request struct {
 	// with SIO_AF_UNIX_GETPEERPID on Windows.
 	// The reply must not be written to it.
 	Conn *net.UnixConn
-	// FD is the received descriptor, or on Windows the duplicated SOCKET
-	// handle. It is closed after the exchange.
+	// FD is the received socket: a descriptor, or on Windows the duplicated
+	// SOCKET handle. It can be of any family and type; SocketNetwork
+	// classifies an IP socket. It is closed after the exchange.
 	FD int
-	// Network is one of "tcp4", "tcp6", "udp4" and "udp6".
-	Network string
 }
 
 // Server accepts protect exchanges. The zero value replies success to every
@@ -71,8 +73,7 @@ type Request struct {
 type Server struct {
 	// Verify, if set, is called for every valid request before Protector.
 	// A non-nil error rejects the request. The server always rejects a
-	// descriptor that is not an AF_INET or AF_INET6 socket of type
-	// SOCK_STREAM or SOCK_DGRAM, before Verify is called.
+	// descriptor that does not name a socket, before Verify is called.
 	Verify func(request *Request) error
 	// Protector exempts the descriptor of each accepted request. If nil,
 	// the socket is left unchanged and the server replies success.

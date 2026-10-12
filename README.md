@@ -57,7 +57,7 @@ defer listener.Close()
 server := &protect.Server{
 	// Optional. Called for every valid request; an error rejects it.
 	Verify: func(request *protect.Request) error {
-		// Inspect request.Conn (peer credentials), request.FD, request.Network.
+		// Inspect request.Conn (peer credentials) or request.FD.
 		return nil
 	},
 	// Exempts the socket, e.g. VpnService.protect, SO_BINDTODEVICE or SO_MARK.
@@ -70,8 +70,10 @@ server := &protect.Server{
 return server.Serve(listener) // returns nil once listener is closed
 ```
 
-The server always rejects a descriptor that is not an `AF_INET` or `AF_INET6`
-socket of type `SOCK_STREAM` or `SOCK_DGRAM`, before calling `Verify`. Each
+The protocol accepts a socket of any family, type and protocol, such as a TCP,
+UDP, ICMP, raw or packet socket; the `Protector` rejects what it cannot exempt.
+`protect.SocketNetwork(fd)` classifies an IP socket for it. The server always
+rejects a descriptor that is not a socket, before calling `Verify`. Each
 exchange is bounded by `Server.Timeout` (default 5 seconds).
 
 On Windows, `Listen` gives every user read and write access to the socket file,

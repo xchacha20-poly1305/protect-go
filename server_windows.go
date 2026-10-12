@@ -75,6 +75,7 @@ func receiveSocket(conn *net.UnixConn) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("protect: duplicate handle %#x of process %d: %w", clientHandle, processID, err)
 	}
+	// Reading the protocol also fails on a handle that is not a socket.
 	info, err := protocolInfo(handle)
 	if err != nil {
 		closeSocket(int(handle))

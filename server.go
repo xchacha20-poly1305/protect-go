@@ -74,12 +74,8 @@ func (s *Server) serve(conn *net.UnixConn) error {
 	}
 	// The received socket is our own reference, and exemption is synchronous.
 	defer closeSocket(fd)
-	network, err := SocketNetwork(fd)
-	if err != nil {
-		return err
-	}
 	if s.Verify != nil {
-		err = s.Verify(&Request{Conn: conn, FD: fd, Network: network})
+		err = s.Verify(&Request{Conn: conn, FD: fd})
 		if err != nil {
 			return fmt.Errorf("protect: verify: %w", err)
 		}

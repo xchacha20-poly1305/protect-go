@@ -117,7 +117,7 @@ func TestVerifyReceivesRequest(t *testing.T) {
 	if err := Protect(path, newSocket(t, "tcp4")); err != nil {
 		t.Fatal(err)
 	}
-	if request.Network != "tcp4" || request.Conn == nil {
+	if request.Conn == nil || request.FD < 0 {
 		t.Errorf("unexpected request %+v", request)
 	}
 }
@@ -150,15 +150,16 @@ func TestClientReportsRejection(t *testing.T) {
 	}
 }
 
-func TestServerRejectsNonIPSocket(t *testing.T) {
-	path := startServer(t, &Server{Verify: func(*Request) error {
-		t.Error("verify called for a rejected request")
+func TestServerAcceptsNonIPSocket(t *testing.T) {
+	protected := make(chan struct{}, 1)
+	path := startServer(t, &Server{Protector: ProtectorFunc(func(int) error {
+		protected <- struct{}{}
 		return nil
-	}, Protector: forbiddenProtector(t)})
-	err := Protect(path, newSocket(t, "unix"))
-	if !errors.Is(err, ErrRejected) {
-		t.Fatalf("got %v, want ErrRejected", err)
+	})})
+	if err := Protect(path, newSocket(t, "unix")); err != nil {
+		t.Fatal(err)
 	}
+	<-protected
 }
 
 func TestServerWaitsForSlowClient(t *testing.T) {

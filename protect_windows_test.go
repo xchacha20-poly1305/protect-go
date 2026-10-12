@@ -9,21 +9,26 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var socketKinds = map[string]struct{ domain, socketType int }{
-	"tcp4": {windows.AF_INET, windows.SOCK_STREAM},
-	"udp4": {windows.AF_INET, windows.SOCK_DGRAM},
-	"tcp6": {windows.AF_INET6, windows.SOCK_STREAM},
-	"udp6": {windows.AF_INET6, windows.SOCK_DGRAM},
-	"unix": {windows.AF_UNIX, windows.SOCK_STREAM},
+var socketKinds = map[string]struct{ domain, socketType, protocol int }{
+	"tcp4": {windows.AF_INET, windows.SOCK_STREAM, 0},
+	"udp4": {windows.AF_INET, windows.SOCK_DGRAM, 0},
+	"tcp6": {windows.AF_INET6, windows.SOCK_STREAM, 0},
+	"udp6": {windows.AF_INET6, windows.SOCK_DGRAM, 0},
+	"ip4":  {windows.AF_INET, windows.SOCK_RAW, windows.IPPROTO_ICMP},
+	"ip6":  {windows.AF_INET6, windows.SOCK_RAW, windows.IPPROTO_ICMPV6},
+	"unix": {windows.AF_UNIX, windows.SOCK_STREAM, 0},
 }
 
 // newSocket creates an unconnected socket of the named kind, closed when the test ends.
 func newSocket(t *testing.T, network string) int {
 	t.Helper()
 	kind := socketKinds[network]
-	handle, err := windows.Socket(kind.domain, kind.socketType, 0)
+	handle, err := windows.Socket(kind.domain, kind.socketType, kind.protocol)
 	if errors.Is(err, windows.WSAEAFNOSUPPORT) {
 		t.Skip("address family not supported")
+	}
+	if errors.Is(err, windows.WSAEACCES) {
+		t.Skip("raw sockets require administrator")
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -78,5 +83,24 @@ func TestServerRejectsNonSocketHandle(t *testing.T) {
 	defer windows.CloseHandle(event)
 	if err := Protect(path, int(event)); !errors.Is(err, ErrRejected) {
 		t.Fatalf("got %v, want ErrRejected", err)
+	}
+}
+
+func TestRawSocket(t *testing.T) {
+	for _, network := range []string{"ip4", "ip6"} {
+		t.Run(network, func(t *testing.T) {
+			fd := newSocket(t, network)
+			got, err := SocketNetwork(fd)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != network {
+				t.Errorf("got %q, want %q", got, network)
+			}
+			path := startServer(t, &Server{})
+			if err := Protect(path, fd); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

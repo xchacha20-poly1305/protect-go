@@ -16,8 +16,8 @@ func allowAllUsers(path string) error {
 }
 
 // receiveSocket reads the one message a client sends and returns the single
-// descriptor it carries. A message of any other shape is rejected, and every
-// descriptor it carried is closed.
+// socket it carries. A message of any other shape, or a descriptor that is not
+// a socket, is rejected, and every descriptor it carried is closed.
 func receiveSocket(conn *net.UnixConn) (int, error) {
 	payload := make([]byte, 1)
 	const descriptorSize = 4
@@ -53,6 +53,11 @@ func receiveSocket(conn *net.UnixConn) (int, error) {
 	if err != nil {
 		closeAll(fds)
 		return -1, err
+	}
+	_, err = unix.GetsockoptInt(fds[0], unix.SOL_SOCKET, unix.SO_TYPE)
+	if err != nil {
+		closeSocket(fds[0])
+		return -1, fmt.Errorf("protect: descriptor is not a socket: %w", err)
 	}
 	return fds[0], nil
 }
