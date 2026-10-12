@@ -6,8 +6,12 @@ A Go implementation of the socket protect path protocol: a client hands a
 socket descriptor over a Unix-domain socket to the program that owns a tunnel,
 and that program exempts the socket from the tunnel before any packet is sent.
 
-The only dependency is `golang.org/x/sys`. The protocol needs `SCM_RIGHTS`, so it
-works on Unix systems only; elsewhere every call returns `errors.ErrUnsupported`.
+The only dependency is `golang.org/x/sys`. On Unix the socket travels as an
+`SCM_RIGHTS` descriptor. Windows `AF_UNIX` sockets carry no descriptors, so on
+Windows (10 version 1803 or later) the client sends its `SOCKET` handle value
+and the server duplicates the handle out of the client process; see the
+[Windows draft](https://github.com/xchacha20-poly1305/husi/blob/dev/docs/protect_windows.md).
+On other systems every call returns `errors.ErrUnsupported`.
 
 ## Client
 
@@ -15,7 +19,8 @@ works on Unix systems only; elsewhere every call returns `errors.ErrUnsupported`
 err := protect.Protect(path, fd)
 ```
 
-Submit the socket after it is created and before it connects. To protect every
+Submit the socket after it is created and before it connects. On Windows, `fd`
+is the `SOCKET` handle, and it must stay open until `Protect` returns. To protect every
 socket of a `net.Dialer` or `net.ListenConfig`:
 
 ```go
@@ -43,7 +48,7 @@ dialer := net.Dialer{Control: func(network, address string, conn syscall.RawConn
 ## Server
 
 ```go
-listener, err := protect.Listen(path) // mode 0777; replaces a stale socket file
+listener, err := protect.Listen(path) // open to all users; replaces a stale socket file
 if err != nil {
 	return err
 }
@@ -68,3 +73,8 @@ return server.Serve(listener) // returns nil once listener is closed
 The server always rejects a descriptor that is not an `AF_INET` or `AF_INET6`
 socket of type `SOCK_STREAM` or `SOCK_DGRAM`, before calling `Verify`. Each
 exchange is bounded by `Server.Timeout` (default 5 seconds).
+
+On Windows, `Listen` gives every user read and write access to the socket file,
+and the server needs `PROCESS_DUP_HANDLE` access to each client process, which
+a server running as `LocalSystem` has. Exemption usually sets `IP_UNICAST_IF`
+or `IPV6_UNICAST_IF`.

@@ -2,12 +2,14 @@
 //
 // A tunnel that captures a host's IP traffic also captures sockets of other
 // local processes. A client hands each socket that must stay outside the tunnel
-// to the server that owns it, as one SCM_RIGHTS descriptor over a Unix-domain
-// stream socket. The server exempts the socket and replies with one octet:
-// [ReplySuccess] or [ReplyFailure].
+// to the server that owns it over a Unix-domain stream socket. The server
+// exempts the socket and replies with one octet: [ReplySuccess] or
+// [ReplyFailure].
 //
-// The protocol needs SCM_RIGHTS, so it works only on Unix systems. On other
-// systems every operation returns [errors.ErrUnsupported].
+// On Unix the socket travels as one SCM_RIGHTS descriptor. Windows AF_UNIX
+// sockets carry no descriptors, so there the client sends the value of its
+// SOCKET handle, and the server duplicates that handle out of the client
+// process. On other systems every operation returns [errors.ErrUnsupported].
 package protect
 
 import (
@@ -24,9 +26,6 @@ const (
 	ReplyFailure byte = 0x01
 )
 
-// requestPayload is the octet that carries the descriptor. Its value has no meaning.
-const requestPayload byte = 0x01
-
 // DefaultTimeout bounds one exchange when the caller sets no other limit.
 const DefaultTimeout = 5 * time.Second
 
@@ -40,7 +39,8 @@ const DefaultTimeout = 5 * time.Second
 var ErrRejected = errors.New("protect: server rejected the descriptor")
 
 // Protector exempts a socket so that its packets stay outside the tunnel.
-// The descriptor is owned by the server and is closed after Protect returns.
+// fd is a descriptor on Unix and a SOCKET handle on Windows. It is owned by
+// the server and is closed after Protect returns.
 type Protector interface {
 	Protect(fd int) error
 }
@@ -55,10 +55,12 @@ func (f ProtectorFunc) Protect(fd int) error {
 // Request is a valid request received by a Server.
 type Request struct {
 	// Conn is the connection the request arrived on. It can be used to
-	// inspect the credentials of the peer, for example with SO_PEERCRED.
+	// inspect the credentials of the peer, for example with SO_PEERCRED, or
+	// with SIO_AF_UNIX_GETPEERPID on Windows.
 	// The reply must not be written to it.
 	Conn *net.UnixConn
-	// FD is the received descriptor. It is closed after the exchange.
+	// FD is the received descriptor, or on Windows the duplicated SOCKET
+	// handle. It is closed after the exchange.
 	FD int
 	// Network is one of "tcp4", "tcp6", "udp4" and "udp6".
 	Network string
