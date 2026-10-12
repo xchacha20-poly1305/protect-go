@@ -33,7 +33,9 @@ func allowAllUsers(path string) error {
 		return err
 	}
 	// An AF_UNIX socket file is a reparse point that cannot be followed.
-	file, err := windows.CreateFile(pathPointer, windows.WRITE_DAC,
+	// SetSecurityInfo reads the current descriptor to keep inherited entries
+	// consistent, so it needs READ_CONTROL as well as WRITE_DAC.
+	file, err := windows.CreateFile(pathPointer, windows.READ_CONTROL|windows.WRITE_DAC,
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil,
 		windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
 	if err != nil {
